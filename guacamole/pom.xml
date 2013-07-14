@@ -14,8 +14,11 @@
     </properties>
 
     <build>
-        <plugins>
 
+        <!-- guacamole.war -->
+        <finalName>guacamole</finalName>
+
+        <plugins>
             <!-- Written for 1.6 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -27,8 +30,6 @@
             </plugin>
 
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-war-plugin</artifactId>
                 <configuration>
 
                     <!-- Filter webapp dir --> 
@@ -49,6 +50,8 @@
                     </overlays>
                     
                 </configuration>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
             </plugin>
 
         </plugins>

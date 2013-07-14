@@ -1,20 +1,21 @@
+diff --git a/guacamole/pom.xml b/guacamole/pom.xml
+index bd00f4d..f2f471f 100644
 --- a/guacamole/pom.xml
 +++ b/guacamole/pom.xml
-@@ -11,9 +11,13 @@
- 
-     <properties>
-         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+@@ -14,8 +14,11 @@
      </properties>
  
      <build>
-+
+-        <plugins>
+ 
 +        <!-- guacamole.war -->
 +        <finalName>guacamole</finalName>
 +
-         <plugins>
- 
++        <plugins>
              <!-- Written for 1.6 -->
-@@ -27,8 +34,6 @@
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+@@ -27,8 +30,6 @@
              </plugin>
  
              <plugin>
@@ -23,9 +24,7 @@
                  <configuration>
  
                      <!-- Filter webapp dir --> 
-@@ -47,8 +52,10 @@
-                             <type>zip</type>
-                         </overlay>
+@@ -49,6 +50,8 @@
                      </overlays>
                      
                  </configuration>
