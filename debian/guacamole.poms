@@ -1,4 +1,4 @@
-debian/pom.xml
+pom.xml
 guacamole/pom.xml
 guacamole-common/pom.xml
 guacamole-ext/pom.xml
