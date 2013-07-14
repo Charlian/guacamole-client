@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/maven.mk
+
+JAVA_HOME := /usr/lib/jvm/default-java
+
+# maven-debian-helper leaves empty mvn-build after clean
+# po-debconf docs recommend running debconf-updatepo here
+clean::
+	debconf-updatepo
+	$(RM) mvn-build
+
