@@ -2,7 +2,7 @@ Source: guacamole-client
 Priority: extra
 Maintainer: Michael Jumper <mike.jumper@guac-dev.org>
 Build-Depends: po-debconf, debhelper (>= 7.0), cdbs, default-jdk | java6-sdk, maven-debian-helper, libmaven-war-plugin-java, libmaven-assembly-plugin-java, libmaven-plugin-testing-java, libslf4j-java, libservlet2.5-java
-Standards-Version: 3.9.3
+Standards-Version: 3.9.4
 Section: net
 Homepage: http://guac-dev.org/
 Vcs-Git: git://github.com/glyptodon/guacamole-client.git
