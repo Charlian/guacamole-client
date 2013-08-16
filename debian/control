@@ -20,7 +20,7 @@ Description: HTML5 web application for accessing remote desktops
  tunnel and proxy, allowing access to multiple desktops through a web browser.
  No plugins are needed: the client requires nothing more than a web browser
  supporting HTML5 and AJAX.
- 
+
 Package: guacamole-tomcat
 Section: net
 Architecture: all
@@ -35,4 +35,4 @@ Description: Tomcat-based Guacamole install with VNC support
  This metapackage depends on Tomcat, Guacamole, and the VNC support plugin for
  guacamole. Guacamole is automatically installed and configured under
  Tomcat.
- 
+
