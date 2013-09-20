@@ -1,0 +1,84 @@
+diff --git a/guacamole-common/pom.xml b/guacamole-common/pom.xml
+index a5b6223..c0918c2 100644
+--- a/guacamole-common/pom.xml
++++ b/guacamole-common/pom.xml
+@@ -70,37 +70,6 @@
+                 </configuration>
+             </plugin>
+ 
+-            <!-- Attach source jar -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-source-plugin</artifactId>
+-                <executions>
+-                    <execution>
+-                        <id>attach-sources</id>
+-                        <goals>
+-                            <goal>jar</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-
+-            <!-- Attach JavaDoc jar -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-javadoc-plugin</artifactId>
+-                <configuration>
+-                    <detectOfflineLinks>false</detectOfflineLinks>
+-                </configuration>
+-                <executions>
+-                    <execution>
+-                        <id>attach-javadocs</id>
+-                        <goals>
+-                            <goal>jar</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-
+         </plugins>
+     </build>
+ 
+diff --git a/guacamole-ext/pom.xml b/guacamole-ext/pom.xml
+index 4ea7647..726062d 100644
+--- a/guacamole-ext/pom.xml
++++ b/guacamole-ext/pom.xml
+@@ -70,37 +70,6 @@
+                 </configuration>
+             </plugin>
+ 
+-            <!-- Attach source jar -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-source-plugin</artifactId>
+-                <executions>
+-                    <execution>
+-                        <id>attach-sources</id>
+-                        <goals>
+-                            <goal>jar</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-
+-            <!-- Attach JavaDoc jar -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-javadoc-plugin</artifactId>
+-                <configuration>
+-                    <detectOfflineLinks>false</detectOfflineLinks>
+-                </configuration>
+-                <executions>
+-                    <execution>
+-                        <id>attach-javadocs</id>
+-                        <goals>
+-                            <goal>jar</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-
+         </plugins>
+     </build>
+ 

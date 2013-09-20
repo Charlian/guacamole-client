@@ -1,7 +1,8 @@
 guacamole-client (0.8.3-1) unstable; urgency=low
 
-  * Merge changes from 0.8.2
+  * Merge changes from 0.8.3
   * Migrate to new upstream source package (guacamole-client)
+  * Remove use of Maven sources and javadoc plugins
 
  -- Michael Jumper <mike.jumper@guac-dev.org>  Fri, 20 Sep 2013 11:28:00 -0700
 
