@@ -246,9 +246,8 @@ div#all-connections {
     padding: 0;
 }
 
-#all-connections-buttons {
+#all-connections .list-buttons {
     text-align: center;
-    margin: 1em;
     padding: 0;
 }
 
@@ -279,6 +278,7 @@ div#recent-connections div.connection {
     overflow: hidden;
 }
 
+.group,
 .connection {
     cursor: pointer;
 }
@@ -287,20 +287,11 @@ div#recent-connections div.connection {
     background: #CDA;
 }
 
+.group,
 .connection .name {
     color: black;
     font-weight: normal;
     padding: 0.1em;
-}
-
-.connection .usage {
-    float: right;
-    font-style: italic;
-    color: gray;
-}
-
-.connection.in-use {
-    opacity: 0.5;
 }
 
 .connection .thumbnail {
@@ -318,38 +309,12 @@ div#all-connections .connection {
     text-align: left;
 }
 
-div#all-connections .connection .thumbnail {
-    display: none;
+div#recent-connections .connection .thumbnail {
+    display: block;
 }
 
 div#all-connections .connection {
     padding: 0.1em;
-}
-
-.protocol {
-    display: inline-block;
-}
-
-.protocol .icon {
-    width: 24px;
-    height: 24px;
-    background-image: url('../images/protocol-icons/guac-plug.png');
-    background-size: 16px 16px;
-    -moz-background-size: 16px 16px;
-    -webkit-background-size: 16px 16px;
-    -khtml-background-size: 16px 16px;
-    background-repeat: no-repeat;
-    background-position: center center;
-    opacity: 0.5;
-}
-
-.protocol .icon.ssh {
-    background-image: url('../images/protocol-icons/guac-text.png');
-}
-
-.protocol .icon.vnc,
-.protocol .icon.rdp {
-    background-image: url('../images/protocol-icons/guac-monitor.png');
 }
 
 div#recent-connections .protocol {

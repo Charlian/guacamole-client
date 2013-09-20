@@ -37,23 +37,20 @@ package net.sourceforge.guacamole.net.auth.mysql.service;
  *
  * ***** END LICENSE BLOCK ***** */
 
-import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import net.sourceforge.guacamole.GuacamoleClientException;
-import net.sourceforge.guacamole.GuacamoleException;
-import net.sourceforge.guacamole.net.GuacamoleSocket;
-import net.sourceforge.guacamole.net.InetGuacamoleSocket;
-import net.sourceforge.guacamole.net.auth.mysql.ActiveConnectionSet;
+import org.glyptodon.guacamole.GuacamoleClientException;
+import org.glyptodon.guacamole.GuacamoleException;
+import org.glyptodon.guacamole.net.GuacamoleSocket;
+import org.glyptodon.guacamole.net.InetGuacamoleSocket;
+import org.glyptodon.guacamole.net.SSLGuacamoleSocket;
+import net.sourceforge.guacamole.net.auth.mysql.ActiveConnectionMap;
 import net.sourceforge.guacamole.net.auth.mysql.MySQLConnection;
 import net.sourceforge.guacamole.net.auth.mysql.MySQLConnectionRecord;
 import net.sourceforge.guacamole.net.auth.mysql.MySQLGuacamoleSocket;
@@ -62,15 +59,16 @@ import net.sourceforge.guacamole.net.auth.mysql.dao.ConnectionMapper;
 import net.sourceforge.guacamole.net.auth.mysql.dao.ConnectionParameterMapper;
 import net.sourceforge.guacamole.net.auth.mysql.model.Connection;
 import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionExample;
+import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionExample.Criteria;
 import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionHistory;
 import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionHistoryExample;
 import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionParameter;
 import net.sourceforge.guacamole.net.auth.mysql.model.ConnectionParameterExample;
 import net.sourceforge.guacamole.net.auth.mysql.properties.MySQLGuacamoleProperties;
-import net.sourceforge.guacamole.properties.GuacamoleProperties;
-import net.sourceforge.guacamole.protocol.ConfiguredGuacamoleSocket;
-import net.sourceforge.guacamole.protocol.GuacamoleClientInformation;
-import net.sourceforge.guacamole.protocol.GuacamoleConfiguration;
+import org.glyptodon.guacamole.properties.GuacamoleProperties;
+import org.glyptodon.guacamole.protocol.ConfiguredGuacamoleSocket;
+import org.glyptodon.guacamole.protocol.GuacamoleClientInformation;
+import org.glyptodon.guacamole.protocol.GuacamoleConfiguration;
 import org.apache.ibatis.session.RowBounds;
 
 /**
@@ -112,10 +110,10 @@ public class ConnectionService {
     private Provider<MySQLGuacamoleSocket> mySQLGuacamoleSocketProvider;
 
     /**
-     * Set of all currently active connections.
+     * Map of all currently active connections.
      */
     @Inject
-    private ActiveConnectionSet activeConnectionSet;
+    private ActiveConnectionMap activeConnectionMap;
 
     /**
      * Service managing users.
@@ -127,15 +125,23 @@ public class ConnectionService {
      * Retrieves the connection having the given name from the database.
      *
      * @param name The name of the connection to return.
+     * @param parentID The ID of the parent connection group.
      * @param userID The ID of the user who queried this connection.
      * @return The connection having the given name, or null if no such
      *         connection could be found.
      */
-    public MySQLConnection retrieveConnection(String name, int userID) {
+    public MySQLConnection retrieveConnection(String name, Integer parentID,
+            int userID) {
 
-        // Query connection by connection identifier (name)
+        // Create criteria
         ConnectionExample example = new ConnectionExample();
-        example.createCriteria().andConnection_nameEqualTo(name);
+        Criteria criteria = example.createCriteria().andConnection_nameEqualTo(name);
+        if(parentID != null)
+            criteria.andParent_idEqualTo(parentID);
+        else
+            criteria.andParent_idIsNull();
+        
+        // Query connection by name and parentID
         List<Connection> connections =
                 connectionDAO.selectByExample(example);
 
@@ -143,12 +149,32 @@ public class ConnectionService {
         if(connections.isEmpty())
             return null;
 
-        // Assert only one connection found
-        assert connections.size() == 1 : "Multiple connections with same name.";
-
         // Otherwise, return found connection
         return toMySQLConnection(connections.get(0), userID);
 
+    }
+
+    /**
+     * Retrieves the connection having the given unique identifier 
+     * from the database.
+     *
+     * @param uniqueIdentifier The unique identifier of the connection to retrieve.
+     * @param userID The ID of the user who queried this connection.
+     * @return The connection having the given unique identifier, 
+     *         or null if no such connection was found.
+     */
+    public MySQLConnection retrieveConnection(String uniqueIdentifier, int userID) {
+
+        // The unique identifier for a MySQLConnection is the database ID
+        int connectionID;
+        try {
+            connectionID = Integer.parseInt(uniqueIdentifier);
+        } catch(NumberFormatException e) {
+            // Invalid number means it can't be a DB record; not found
+            return null;
+        }
+        
+        return retrieveConnection(connectionID, userID);
     }
 
     /**
@@ -171,66 +197,34 @@ public class ConnectionService {
         // Otherwise, return found connection
         return toMySQLConnection(connection, userID);
     }
-
+    
     /**
-     * Retrieves a translation map of connection names to their corresponding
-     * IDs.
-     *
-     * @param ids The IDs of the connections to retrieve the names of.
-     * @return A map containing the names of all connections and their
-     *         corresponding IDs.
+     * Returns a list of the IDs of all connections with a given parent ID.
+     * @param parentID The ID of the parent for all the queried connections.
+     * @return a list of the IDs of all connections with a given parent ID.
      */
-    public Map<String, Integer> translateNames(List<Integer> ids) {
-
-        // If no IDs given, just return empty map
-        if (ids.isEmpty())
-            return Collections.EMPTY_MAP;
-
-        // Map of all names onto their corresponding IDs.
-        Map<String, Integer> names = new HashMap<String, Integer>();
-
-        // Get all connections having the given IDs
+    public List<Integer> getAllConnectionIDs(Integer parentID) {
+        
+        // Create criteria
         ConnectionExample example = new ConnectionExample();
-        example.createCriteria().andConnection_idIn(ids);
+        Criteria criteria = example.createCriteria();
+        
+        if(parentID != null)
+            criteria.andParent_idEqualTo(parentID);
+        else
+            criteria.andParent_idIsNull();
+        
+        // Query the connections
         List<Connection> connections = connectionDAO.selectByExample(example);
-
-        // Produce set of names
-        for (Connection connection : connections)
-            names.put(connection.getConnection_name(),
-                      connection.getConnection_id());
-
-        return names;
-
-    }
-
-    /**
-     * Retrieves a map of all connection names for the given IDs.
-     *
-     * @param ids The IDs of the connections to retrieve the names of.
-     * @return A map containing the names of all connections and their
-     *         corresponding IDs.
-     */
-    public Map<Integer, String> retrieveNames(Collection<Integer> ids) {
-
-        // If no IDs given, just return empty map
-        if (ids.isEmpty())
-            return Collections.EMPTY_MAP;
-
-        // Map of all names onto their corresponding IDs.
-        Map<Integer, String> names = new HashMap<Integer, String>();
-
-        // Get all connections having the given IDs
-        ConnectionExample example = new ConnectionExample();
-        example.createCriteria().andConnection_idIn(Lists.newArrayList(ids));
-        List<Connection> connections = connectionDAO.selectByExample(example);
-
-        // Produce set of names
-        for (Connection connection : connections)
-            names.put(connection.getConnection_id(),
-                      connection.getConnection_name());
-
-        return names;
-
+        
+        // List of IDs of connections with the given parent
+        List<Integer> connectionIDs = new ArrayList<Integer>();
+        
+        for(Connection connection : connections) {
+            connectionIDs.add(connection.getConnection_id());
+        }
+        
+        return connectionIDs;
     }
 
     /**
@@ -266,7 +260,9 @@ public class ConnectionService {
         MySQLConnection mySQLConnection = mySQLConnectionProvider.get();
         mySQLConnection.init(
             connection.getConnection_id(),
+            connection.getParent_id(),
             connection.getConnection_name(),
+            Integer.toString(connection.getConnection_id()),
             config,
             retrieveHistory(connection.getConnection_id()),
             userID
@@ -320,6 +316,8 @@ public class ConnectionService {
 
         return connectionRecords;
     }
+    
+    
 
     /**
      * Create a MySQLGuacamoleSocket using the provided connection.
@@ -328,37 +326,55 @@ public class ConnectionService {
      * @param info The information to use when performing the connection
      *             handshake.
      * @param userID The ID of the user who is connecting to the socket.
+     * @param connectionGroupID The ID of the balancing connection group that is
+     *                          being connected to; null if not used.
      * @return The connected socket.
      * @throws GuacamoleException If an error occurs while connecting the
      *                            socket.
      */
     public MySQLGuacamoleSocket connect(MySQLConnection connection,
-            GuacamoleClientInformation info, int userID)
+            GuacamoleClientInformation info, int userID, Integer connectionGroupID)
         throws GuacamoleException {
 
         // If the given connection is active, and multiple simultaneous
         // connections are not allowed, disallow connection
         if(GuacamoleProperties.getProperty(
                 MySQLGuacamoleProperties.MYSQL_DISALLOW_SIMULTANEOUS_CONNECTIONS, false)
-                && activeConnectionSet.isActive(connection.getConnectionID()))
+                && activeConnectionMap.isActive(connection.getConnectionID()))
             throw new GuacamoleClientException("Cannot connect. This connection is in use.");
+        
+        if(GuacamoleProperties.getProperty(
+                MySQLGuacamoleProperties.MYSQL_DISALLOW_DUPLICATE_CONNECTIONS, true)
+                && activeConnectionMap.isConnectionUserActive(connection.getConnectionID(), userID))
+            throw new GuacamoleClientException
+                    ("Cannot connect. Connection already in use by this user.");
 
         // Get guacd connection information
-        String host = GuacamoleProperties.getProperty(GuacamoleProperties.GUACD_HOSTNAME);
-        int port = GuacamoleProperties.getProperty(GuacamoleProperties.GUACD_PORT);
+        String host = GuacamoleProperties.getRequiredProperty(GuacamoleProperties.GUACD_HOSTNAME);
+        int port = GuacamoleProperties.getRequiredProperty(GuacamoleProperties.GUACD_PORT);
 
         // Get socket
-        GuacamoleSocket socket = new ConfiguredGuacamoleSocket(
-            new InetGuacamoleSocket(host, port),
-            connection.getConfiguration(), info
-        );
+        GuacamoleSocket socket;
+        if (GuacamoleProperties.getProperty(GuacamoleProperties.GUACD_SSL, false))
+            socket = new ConfiguredGuacamoleSocket(
+                new SSLGuacamoleSocket(host, port),
+                connection.getConfiguration(), info
+            );
+        else
+            socket = new ConfiguredGuacamoleSocket(
+                new InetGuacamoleSocket(host, port),
+                connection.getConfiguration(), info
+            );
 
         // Mark this connection as active
-        int historyID = activeConnectionSet.openConnection(connection.getConnectionID(), userID);
+        int historyID = activeConnectionMap.openConnection(connection.getConnectionID(), 
+                userID, connectionGroupID);
 
         // Return new MySQLGuacamoleSocket
         MySQLGuacamoleSocket mySQLGuacamoleSocket = mySQLGuacamoleSocketProvider.get();
-        mySQLGuacamoleSocket.init(socket, connection.getConnectionID(), historyID);
+        mySQLGuacamoleSocket.init(socket, connection.getConnectionID(), userID, 
+                historyID, connectionGroupID);
+        
         return mySQLGuacamoleSocket;
 
     }
@@ -369,15 +385,18 @@ public class ConnectionService {
      * @param name The name to assign to the new connection.
      * @param protocol The protocol to assign to the new connection.
      * @param userID The ID of the user who created this connection.
+     * @param parentID The ID of the parent connection group.
      * @return A new MySQLConnection containing the data of the newly created
      *         connection.
      */
-    public MySQLConnection createConnection(String name, String protocol, int userID) {
+    public MySQLConnection createConnection(String name, String protocol,
+            int userID, Integer parentID) {
 
         // Initialize database connection
         Connection connection = new Connection();
         connection.setConnection_name(name);
         connection.setProtocol(protocol);
+        connection.setParent_id(parentID);
 
         // Create connection
         connectionDAO.insert(connection);
@@ -405,36 +424,48 @@ public class ConnectionService {
         // Populate connection
         Connection connection = new Connection();
         connection.setConnection_id(mySQLConnection.getConnectionID());
-        connection.setConnection_name(mySQLConnection.getIdentifier());
+        connection.setParent_id(mySQLConnection.getParentID());
+        connection.setConnection_name(mySQLConnection.getName());
         connection.setProtocol(mySQLConnection.getConfiguration().getProtocol());
 
         // Update the connection in the database
-        connectionDAO.updateByPrimaryKeySelective(connection);
+        connectionDAO.updateByPrimaryKey(connection);
 
     }
 
     /**
-     * Get the names of all the connections defined in the system.
+     * Get the identifiers of all the connections defined in the system 
+     * with a certain parentID.
      *
-     * @return A Set of names of all the connections defined in the system.
+     * @return A Set of identifiers of all the connections defined in the system
+     * with the given parentID.
      */
-    public Set<String> getAllConnectionNames() {
+    public Set<String> getAllConnectionIdentifiers(Integer parentID) {
 
-        // Set of all present connection names
-        Set<String> names = new HashSet<String>();
+        // Set of all present connection identifiers
+        Set<String> identifiers = new HashSet<String>();
+        
+        // Set up Criteria
+        ConnectionExample example = new ConnectionExample();
+        Criteria criteria = example.createCriteria();
+        if(parentID != null)
+            criteria.andParent_idEqualTo(parentID);
+        else
+            criteria.andParent_idIsNull();
 
-        // Query all connection names
+        // Query connection identifiers
         List<Connection> connections =
-                connectionDAO.selectByExample(new ConnectionExample());
+                connectionDAO.selectByExample(example);
         for (Connection connection : connections)
-            names.add(connection.getConnection_name());
+            identifiers.add(String.valueOf(connection.getConnection_id()));
 
-        return names;
+        return identifiers;
 
     }
 
     /**
-     * Get the connection IDs of all the connections defined in the system.
+     * Get the connection IDs of all the connections defined in the system 
+     * with a certain parent connection group.
      *
      * @return A list of connection IDs of all the connections defined in the system.
      */
@@ -443,9 +474,12 @@ public class ConnectionService {
         // Set of all present connection IDs
         List<Integer> connectionIDs = new ArrayList<Integer>();
 
-        // Query all connection IDs
+        // Create the criteria
+        ConnectionExample example = new ConnectionExample();
+        
+        // Query the connections
         List<Connection> connections =
-                connectionDAO.selectByExample(new ConnectionExample());
+                connectionDAO.selectByExample(example);
         for (Connection connection : connections)
             connectionIDs.add(connection.getConnection_id());
 

@@ -23,18 +23,101 @@
 var GuacamoleService = GuacamoleService || {};
 
 /**
+ * An arbitary Guacamole connection group, having the given type, ID and name.
+ * 
+ * @constructor
+ * @param {Number} type The type of this connection group - either ORGANIZATIONAL
+ *                      or BALANCING.
+ * @param {String} id An arbitrary ID, likely assigned by the auth provider.
+ * @param {String} name The human-readable name of this group.
+ */
+GuacamoleService.ConnectionGroup = function(type, id, name) {
+
+    /**
+     * The type of this connection group.
+     * @type Number
+     */
+    this.type = type;
+
+    /**
+     * The unique ID of this connection group.
+     * @type String
+     */
+    this.id = id;
+
+    /**
+     * The human-readable name associated with this connection group.
+     * @type String
+     */
+    this.name = name;
+
+    /**
+     * The parent connection group of this group. If this group is the root
+     * group, this will be null.
+     * 
+     * @type GuacamoleService.ConnectionGroup
+     */
+    this.parent = null;
+
+    /**
+     * All connection groups contained within this group.
+     * @type GuacamoleService.ConnectionGroup[]
+     */
+    this.groups = [];
+
+    /**
+     * All connections contained within this group.
+     * @type GuacamoleService.Connection[]
+     */
+    this.connections = [];
+
+};
+
+/**
+ * Set of all possible types for ConnectionGroups.
+ */
+GuacamoleService.ConnectionGroup.Type = {
+
+    /**
+     * Organizational groups exist solely to hold connections or other groups,
+     * and provide no other semantics.
+     * 
+     * @type Number
+     */
+    "ORGANIZATIONAL" : 0,
+
+    /**
+     * Balancing groups act as connections. Users that have READ permission on
+     * balancing groups can use the group as if it were a connection, and that
+     * group will choose an appropriate connection within itself for that user
+     * to use.
+     * 
+     * @type Number
+     */
+    "BALANCING"      : 1
+
+};
+
+/**
  * An arbitrary Guacamole connection, consisting of an ID/protocol pair.
  * 
  * @constructor
  * @param {String} protocol The protocol used by this connection.
  * @param {String} id The ID associated with this connection.
+ * @param {String} name The human-readable name associated with this connection.
  */
-GuacamoleService.Connection = function(protocol, id) {
+GuacamoleService.Connection = function(protocol, id, name) {
 
     /**
      * Reference to this connection.
      */
     var guac_connection = this;
+
+    /**
+     * The parent connection group of this connection.
+     * @type GuacamoleService.ConnectionGroup
+     */
+    this.parent = null;
 
     /**
      * The protocol associated with this connection.
@@ -50,6 +133,14 @@ GuacamoleService.Connection = function(protocol, id) {
      * All parameters associated with this connection, if available.
      */
     this.parameters = {};
+
+    /**
+     * The name of this connection. This name is arbitrary and local to the
+     * group containing the connection.
+     * 
+     * @type String
+     */
+    this.name = name;
 
     /**
      * An array of GuacamoleService.Connection.Record listing the usage
@@ -150,6 +241,11 @@ GuacamoleService.PermissionSet = function() {
     this.create_connection = false;
 
     /**
+     * Whether permission to create connection groups is granted.
+     */
+    this.create_connection_group = false;
+
+    /**
      * Whether permission to administer the system in general is granted.
      */
     this.administer = false;
@@ -194,6 +290,26 @@ GuacamoleService.PermissionSet = function() {
      */
     this.administer_connection = {};
 
+    /**
+     * Object with a property entry for each readable connection group.
+     */
+    this.read_connection_group = {};
+
+    /**
+     * Object with a property entry for each updatable connection group.
+     */
+    this.update_connection_group = {};
+
+    /**
+     * Object with a property entry for each removable connection group.
+     */
+    this.remove_connection_group = {};
+
+    /**
+     * Object with a property entry for each administerable connection group.
+     */
+    this.administer_connection_group = {};
+
 };
 
 /**
@@ -230,23 +346,162 @@ GuacamoleService.handleResponse = function(xhr) {
 GuacamoleService.Connections = {
 
     /**
-     * Comparator which compares two GuacamoleService.Connection objects.
+     * Comparator which compares two arbitrary objects by their name property.
      */
     "comparator" : function(a, b) {
-        return a.id.localeCompare(b.id);
+        return a.name.localeCompare(b.name);
     },
 
-     /**
-      * Returns an array of Connections for which the current user has access.
-      * 
-      * @param {String} parameters Any parameters which should be passed to the
-      *                            server for the sake of authentication
-      *                            (optional).
-      * @return {GuacamoleService.Connection[]} An array of Connections for
-      *                                         which the current user has
-      *                                         access.
-      */   
+    /**
+     * Returns the root connection group, containing a hierarchy of all other
+     * groups and connections for which the current user has access.
+     * 
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     * @return {GuacamoleService.ConnectionGroup} The root group, containing
+     *                                            a hierarchy of all other
+     *                                            groups and connections to
+     *                                            which the current user has
+     *                                            access.
+     */   
     "list" : function(parameters) {
+
+        /**
+         * Parse the contents of the given connection element within XML,
+         * returning a corresponding GuacamoleService.Connection.
+         * 
+         * @param {GuacamoleService.ConnectionGroup} The connection group
+         *                                           containing this connection.
+         * @param {Element} element The element being parsed.
+         * @return {GuacamoleService.Connection} The connection represented by
+         *                                       the element just parsed.
+         */
+        function parseConnection(parent, element) {
+
+            var i;
+
+            var connection = new GuacamoleService.Connection(
+                element.getAttribute("protocol"),
+                element.getAttribute("id"),
+                element.getAttribute("name")
+            );
+
+            // Set parent
+            connection.parent = parent;
+
+            // Add parameter values for each parmeter received
+            var paramElements = element.getElementsByTagName("param");
+            for (i=0; i<paramElements.length; i++) {
+
+                var paramElement = paramElements[i];
+                var name = paramElement.getAttribute("name");
+
+                connection.parameters[name] = paramElement.textContent;
+
+            }
+
+            // Parse history, if available
+            var historyElements = element.getElementsByTagName("history");
+            if (historyElements.length === 1) {
+
+                // For each record in history
+                var history = historyElements[0];
+                var recordElements = history.getElementsByTagName("record");
+                for (i=0; i<recordElements.length; i++) {
+
+                    // Get record
+                    var recordElement = recordElements[i];
+                    var record = new GuacamoleService.Connection.Record(
+                        recordElement.textContent,
+                        parseInt(recordElement.getAttribute("start")),
+                        parseInt(recordElement.getAttribute("end")),
+                        recordElement.getAttribute("active") === "yes"
+                    );
+
+                    // Append to connection history
+                    connection.history.push(record);
+
+                }
+
+            }
+
+            // Return parsed connection
+            return connection;
+
+        }
+
+        /**
+         * Recursively parse the contents of the given group element within XML,
+         * returning a corresponding GuacamoleService.ConnectionGroup.
+         * 
+         * @param {GuacamoleService.ConnectionGroup} The connection group
+         *                                           containing this group.
+         * @param {Element} element The element being parsed.
+         * @return {GuacamoleService.ConnectionGroup} The connection group
+         *                                            represented by the element
+         *                                            just parsed.
+         */
+        function parseGroup(parent, element) {
+
+            var id   = element.getAttribute("id");
+            var name = element.getAttribute("name");
+            var type_string = element.getAttribute("type");
+
+            // Translate type name
+            var type;
+            if (type_string === "organizational")
+                type = GuacamoleService.ConnectionGroup.Type.ORGANIZATIONAL;
+            else if (type_string === "balancing")
+                type = GuacamoleService.ConnectionGroup.Type.BALANCING;
+
+            // Create corresponding group
+            var group = new GuacamoleService.ConnectionGroup(type, id, name);
+
+            // Set parent
+            group.parent = parent;
+
+            // For each child element
+            var current = element.firstChild;
+            while (current !== null) {
+
+                var i, child;
+                var children = current.childNodes;
+
+                if (current.localName === "connections") {
+
+                    // Parse all child connections
+                    for (i=0; i<children.length; i++) {
+                        var child = children[i];
+                        if (child.localName === "connection")
+                            group.connections.push(parseConnection(group, child));
+                    }
+                    
+                }
+                else if (current.localName === "groups") {
+
+                    // Parse all child groups 
+                    for (i=0; i<children.length; i++) {
+                        var child = children[i];
+                        if (child.localName === "group")
+                            group.groups.push(parseGroup(group, child));
+                    }
+ 
+                }
+
+                // Next element
+                current = current.nextSibling;
+
+            }
+
+            // Sort groups and connections
+            group.groups.sort(GuacamoleService.Connections.comparator);
+            group.connections.sort(GuacamoleService.Connections.comparator);
+
+            // Return created group
+            return group;
+            
+        }
 
         // Construct request URL
         var list_url = "connections";
@@ -259,67 +514,7 @@ GuacamoleService.Connections = {
 
         // Handle response
         GuacamoleService.handleResponse(xhr);
-
-        // Otherwise, get list
-        var connections = new Array();
-
-        var connectionElements = xhr.responseXML.getElementsByTagName("connection");
-        for (var i=0; i<connectionElements.length; i++) {
-
-            // Create connection for each connection element
-            var connectionElement = connectionElements[i];
-            var connection = new GuacamoleService.Connection(
-                connectionElement.getAttribute("protocol"),
-                connectionElement.getAttribute("id")
-            )
-
-            var j;
-
-            // Add parameter values for each pameter received
-            var paramElements = connectionElement.getElementsByTagName("param");
-            for (j=0; j<paramElements.length; j++) {
-
-                var paramElement = paramElements[j];
-                var name = paramElement.getAttribute("name");
-
-                connection.parameters[name] = paramElement.textContent;
-
-            }
-
-            // Parse history, if available
-            var historyElements = connectionElement.getElementsByTagName("history");
-            if (historyElements.length == 1) {
-
-                // For each record in history
-                var history = historyElements[0];
-                var recordElements = history.getElementsByTagName("record");
-                for (j=0; j<recordElements.length; j++) {
-
-                    // Get record
-                    var recordElement = recordElements[j];
-                    var record = new GuacamoleService.Connection.Record(
-                        recordElement.textContent,
-                        parseInt(recordElement.getAttribute("start")),
-                        parseInt(recordElement.getAttribute("end")),
-                        recordElement.getAttribute("active") == "yes"
-                    );
-
-                    // Append to connection history
-                    connection.history.push(record);
-
-                }
-
-            }
-
-            // Add connection
-            connections.push(connection);
-            
-        }
-
-        // Sort connections by ID
-        connections.sort(GuacamoleService.Connections.comparator);
-
-        return connections;
+        return parseGroup(null, xhr.responseXML.documentElement);
  
     },
 
@@ -334,11 +529,15 @@ GuacamoleService.Connections = {
     "create" : function(connection, parameters) {
 
         // Construct request URL
-        var users_url = "connections/create?id=" + encodeURIComponent(connection.id);
+        var users_url = "connections/create?name=" + encodeURIComponent(connection.name);
         if (parameters) users_url += "&" + parameters;
 
         // Init POST data
         var data = "protocol=" + encodeURIComponent(connection.protocol);
+
+        // Add group if given
+        if (connection.parent)
+            data += "&parentID=" + encodeURIComponent(connection.parent.id);
 
         // Add parameters
         for (var name in connection.parameters)
@@ -357,7 +556,8 @@ GuacamoleService.Connections = {
     },
 
     /**
-     * Updates an existing connection.
+     * Updates an existing connection. All properties are updated except
+     * the location of the connection, which is ignored.
      * 
      * @param {GuacamoleService.Connection} connection The connection to create.
      * @param {String} parameters Any parameters which should be passed to the
@@ -371,7 +571,9 @@ GuacamoleService.Connections = {
         if (parameters) users_url += "&" + parameters;
 
         // Init POST data
-        var data = "protocol=" + encodeURIComponent(connection.protocol);
+        var data =
+                  "name="      + encodeURIComponent(connection.name)
+                + "&protocol=" + encodeURIComponent(connection.protocol);
 
         // Add parameters
         for (var name in connection.parameters)
@@ -381,6 +583,36 @@ GuacamoleService.Connections = {
         // Add user
         var xhr = new XMLHttpRequest();
         xhr.open("POST", users_url, false);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
+        xhr.send(data);
+
+        // Handle response
+        GuacamoleService.handleResponse(xhr);
+
+    },
+
+    /**
+     * Updates the location of an existing connection. This does not result
+     * in any change to the connection provided as a parameter.
+     * 
+     * @param {GuacamoleService.Connection} connection The connection to create.
+     * @param {GuacamoleService.ConnectionGroup} dest The destination group.
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     */
+    "move" : function(connection, dest, parameters) {
+
+        // Construct request URL
+        var connection_url = "connections/move?id=" + encodeURIComponent(connection.id);
+        if (parameters) connection_url += "&" + parameters;
+
+        // Init POST data
+        var data = "parentID=" + encodeURIComponent(dest.id);
+
+        // Move connection
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", connection_url, false);
         xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
         xhr.send(data);
 
@@ -406,6 +638,139 @@ GuacamoleService.Connections = {
         // Add user
         var xhr = new XMLHttpRequest();
         xhr.open("GET", connections_url, false);
+        xhr.send(null);
+
+        // Handle response
+        GuacamoleService.handleResponse(xhr);
+
+    }
+
+};
+
+/**
+ * Collection of service functions which deal with connections groups. Each
+ * function makes an explicit HTTP query to the server, and parses the response.
+ */
+GuacamoleService.ConnectionGroups = {
+
+    /**
+     * Creates a new connection group.
+     * 
+     * @param {GuacamoleService.ConnectionGroup} group The group to create.
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     */
+    "create" : function(group, parameters) {
+
+        // Construct request URL
+        var groups_url = "connectiongroups/create?name=" + encodeURIComponent(group.name);
+        if (parameters) groups_url += "&" + parameters;
+
+        // Init POST data
+        var data;
+        if (group.type === GuacamoleService.ConnectionGroup.Type.ORGANIZATIONAL)
+            data = "type=organizational";
+        else if (group.type === GuacamoleService.ConnectionGroup.Type.BALANCING)
+            data = "type=balancing";
+
+        // Add parent group if given
+        if (group.parent)
+            data += "&parentID=" + encodeURIComponent(group.parent.id);
+
+        // Create group
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", groups_url, false);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
+        xhr.send(data);
+
+        // Handle response
+        GuacamoleService.handleResponse(xhr);
+
+    },
+
+    /**
+     * Updates an existing connection group. All properties are updated except
+     * the location of the group, which is ignored.
+     * 
+     * @param {GuacamoleService.ConnectionGroup} group The group to create.
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     */
+    "update" : function(group, parameters) {
+
+        // Construct request URL
+        var groups_url = "connectiongroups/update?id=" + encodeURIComponent(group.id);
+        if (parameters) groups_url += "&" + parameters;
+
+        // Init POST data
+        var data = "name=" + encodeURIComponent(group.name);
+
+        // Add type
+        if (group.type === GuacamoleService.ConnectionGroup.Type.ORGANIZATIONAL)
+            data += "&type=organizational";
+        else if (group.type === GuacamoleService.ConnectionGroup.Type.BALANCING)
+            data += "&type=balancing";
+
+        // Update group
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", groups_url, false);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
+        xhr.send(data);
+
+        // Handle response
+        GuacamoleService.handleResponse(xhr);
+
+    },
+
+    /**
+     * Sets the location of an existing connection group. This does not result
+     * in any change to the group provided as a parameter.
+     * 
+     * @param {GuacamoleService.ConnectionGroup} group The group to create.
+     * @param {GuacamoleService.ConnectionGroup} dest The destination group.
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     */
+    "move" : function(group, dest, parameters) {
+
+        // Construct request URL
+        var groups_url = "connectiongroups/move?id=" + encodeURIComponent(group.id);
+        if (parameters) groups_url += "&" + parameters;
+
+        // Init POST data
+        var data = "parentID=" + encodeURIComponent(dest.id);
+
+        // Move group
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", groups_url, false);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
+        xhr.send(data);
+
+        // Handle response
+        GuacamoleService.handleResponse(xhr);
+
+    },
+
+    /**
+     * Deletes the connection group having the given identifier.
+     * 
+     * @param {String} id The identifier of the group to delete.
+     * @param {String} parameters Any parameters which should be passed to the
+     *                            server for the sake of authentication
+     *                            (optional).
+     */
+    "remove" : function(id, parameters) {
+
+        // Construct request URL
+        var groups_url = "connectiongroups/delete?id=" + encodeURIComponent(id);
+        if (parameters) groups_url += "&" + parameters;
+
+        // Delete group
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", groups_url, false);
         xhr.send(null);
 
         // Handle response
@@ -483,9 +848,10 @@ GuacamoleService.Users = {
         var name;
 
         // System permissions
-        if (permissions_added.create_user)       data += "&%2Bsys=create-user";
-        if (permissions_added.create_connection) data += "&%2Bsys=create-connection";
-        if (permissions_added.administer)        data += "&%2Bsys=admin";
+        if (permissions_added.create_user)             data += "&%2Bsys=create-user";
+        if (permissions_added.create_connection)       data += "&%2Bsys=create-connection";
+        if (permissions_added.create_connection_group) data += "&%2Bsys=create-connection-group";
+        if (permissions_added.administer)              data += "&%2Bsys=admin";
 
         // User permissions 
         for (name in permissions_added.read_user)
@@ -507,10 +873,21 @@ GuacamoleService.Users = {
         for (name in permissions_added.remove_connection)
             data += "&%2Bconnection=delete:" + encodeURIComponent(name);
 
+        // Connection group permissions 
+        for (name in permissions_added.read_connection_group)
+            data += "&%2Bconnection-group=read:" + encodeURIComponent(name);
+        for (name in permissions_added.administer_connection_group)
+            data += "&%2Bconnection-group=admin:" + encodeURIComponent(name);
+        for (name in permissions_added.update_connection_group)
+            data += "&%2Bconnection-group=update:" + encodeURIComponent(name);
+        for (name in permissions_added.remove_connection_group)
+            data += "&%2Bconnection-group=delete:" + encodeURIComponent(name);
+
         // Creation permissions
-        if (permissions_removed.create_user)       data += "&-sys=create-user";
-        if (permissions_removed.create_connection) data += "&-sys=create-connection";
-        if (permissions_removed.administer)        data += "&-sys=admin";
+        if (permissions_removed.create_user)             data += "&-sys=create-user";
+        if (permissions_removed.create_connection)       data += "&-sys=create-connection";
+        if (permissions_removed.create_connection_group) data += "&-sys=create-connection-group";
+        if (permissions_removed.administer)              data += "&-sys=admin";
 
         // User permissions 
         for (name in permissions_removed.read_user)
@@ -531,6 +908,16 @@ GuacamoleService.Users = {
             data += "&-connection=update:" + encodeURIComponent(name);
         for (name in permissions_removed.remove_connection)
             data += "&-connection=delete:" + encodeURIComponent(name);
+
+        // Connection group permissions 
+        for (name in permissions_removed.read_connection_group)
+            data += "&-connection-group=read:" + encodeURIComponent(name);
+        for (name in permissions_removed.administer_connection_group)
+            data += "&-connection-group=admin:" + encodeURIComponent(name);
+        for (name in permissions_removed.update_connection_group)
+            data += "&-connection-group=update:" + encodeURIComponent(name);
+        for (name in permissions_removed.remove_connection_group)
+            data += "&-connection-group=delete:" + encodeURIComponent(name);
 
         // Update user
         var xhr = new XMLHttpRequest();
@@ -651,6 +1038,11 @@ GuacamoleService.Permissions = {
                     permissions.create_connection = true;
                     break;
 
+                // Create connection group permission
+                case "create-connection-group":
+                    permissions.create_connection_group = true;
+                    break;
+
                 // Create user permission
                 case "create-user":
                     permissions.create_user = true;
@@ -693,6 +1085,40 @@ GuacamoleService.Permissions = {
                 // Delete permission
                 case "delete":
                     permissions.remove_connection[name] = true;
+                    break;
+
+            }
+
+        }
+
+        // Read connection group permissions
+        var connectionGroupElements = xhr.responseXML.getElementsByTagName("connection-group");
+        for (i=0; i<connectionGroupElements.length; i++) {
+
+            // Get name and type
+            type = connectionGroupElements[i].getAttribute("type");
+            name = connectionGroupElements[i].getAttribute("name");
+
+            switch (type) {
+
+                // Read permission
+                case "read":
+                    permissions.read_connection_group[name] = true;
+                    break;
+
+                // Update permission
+                case "update":
+                    permissions.update_connection_group[name] = true;
+                    break;
+
+                // Admin permission
+                case "admin":
+                    permissions.administer_connection_group[name] = true;
+                    break;
+
+                // Delete permission
+                case "delete":
+                    permissions.remove_connection_group[name] = true;
                     break;
 
             }

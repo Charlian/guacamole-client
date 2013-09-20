@@ -38,10 +38,10 @@ package net.sourceforge.guacamole.net.auth.mysql;
  * ***** END LICENSE BLOCK ***** */
 
 import com.google.inject.Inject;
-import net.sourceforge.guacamole.GuacamoleException;
-import net.sourceforge.guacamole.io.GuacamoleReader;
-import net.sourceforge.guacamole.io.GuacamoleWriter;
-import net.sourceforge.guacamole.net.GuacamoleSocket;
+import org.glyptodon.guacamole.GuacamoleException;
+import org.glyptodon.guacamole.io.GuacamoleReader;
+import org.glyptodon.guacamole.io.GuacamoleWriter;
+import org.glyptodon.guacamole.net.GuacamoleSocket;
 
 /**
  * A MySQL specific wrapper around a ConfiguredGuacamoleSocket.
@@ -50,21 +50,15 @@ import net.sourceforge.guacamole.net.GuacamoleSocket;
 public class MySQLGuacamoleSocket implements GuacamoleSocket {
 
     /**
-     * Injected ActiveConnectionSet which will contain all active connections.
+     * Injected ActiveConnectionMap which will contain all active connections.
      */
     @Inject
-    private ActiveConnectionSet activeConnectionSet;
+    private ActiveConnectionMap activeConnectionSet;
 
     /**
      * The wrapped socket.
      */
     private GuacamoleSocket socket;
-
-    /**
-     * The ID associated with the connection associated with the wrapped
-     * socket.
-     */
-    private int connectionID;
 
     /**
      * The ID of the history record associated with this instance of the
@@ -73,18 +67,25 @@ public class MySQLGuacamoleSocket implements GuacamoleSocket {
     private int historyID;
 
     /**
+     * The ID of the balancing connection group that is being connected to; 
+     * null if not used.
+     */
+    private Integer connectionGroupID;
+
+    /**
      * Initialize this MySQLGuacamoleSocket with the provided GuacamoleSocket.
      *
      * @param socket The ConfiguredGuacamoleSocket to wrap.
-     * @param connectionID The ID of the connection associated with the given
-     *                     socket.
      * @param historyID The ID of the history record associated with this
      *                  instance of the connection.
+     * @param connectionGroupID The ID of the balancing connection group that is
+     *                          being connected to; null if not used.
      */
-    public void init(GuacamoleSocket socket, int connectionID, int historyID) {
+    public void init(GuacamoleSocket socket, int connectionID, int userID, 
+            int historyID, Integer connectionGroupID) {
         this.socket = socket;
-        this.connectionID = connectionID;
         this.historyID = historyID;
+        this.connectionGroupID = connectionGroupID;
     }
 
     @Override
@@ -104,7 +105,7 @@ public class MySQLGuacamoleSocket implements GuacamoleSocket {
         socket.close();
 
         // Mark this connection as inactive
-        activeConnectionSet.closeConnection(connectionID, historyID);
+        activeConnectionSet.closeConnection(historyID, connectionGroupID);
     }
 
     @Override

@@ -41,13 +41,13 @@ import com.google.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import net.sourceforge.guacamole.GuacamoleException;
-import net.sourceforge.guacamole.net.GuacamoleSocket;
-import net.sourceforge.guacamole.net.auth.AbstractConnection;
-import net.sourceforge.guacamole.net.auth.ConnectionRecord;
+import org.glyptodon.guacamole.GuacamoleException;
+import org.glyptodon.guacamole.net.GuacamoleSocket;
+import org.glyptodon.guacamole.net.auth.AbstractConnection;
+import org.glyptodon.guacamole.net.auth.ConnectionRecord;
 import net.sourceforge.guacamole.net.auth.mysql.service.ConnectionService;
-import net.sourceforge.guacamole.protocol.GuacamoleClientInformation;
-import net.sourceforge.guacamole.protocol.GuacamoleConfiguration;
+import org.glyptodon.guacamole.protocol.GuacamoleClientInformation;
+import org.glyptodon.guacamole.protocol.GuacamoleConfiguration;
 
 /**
  * A MySQL based implementation of the Connection object.
@@ -59,6 +59,11 @@ public class MySQLConnection extends AbstractConnection {
      * The ID associated with this connection in the database.
      */
     private Integer connectionID;
+
+    /**
+     * The ID of the parent connection group for this connection.
+     */
+    private Integer parentID;
 
     /**
      * The ID of the user who queried or created this connection.
@@ -99,19 +104,38 @@ public class MySQLConnection extends AbstractConnection {
     }
 
     /**
+     * Get the ID of the parent connection group for this connection, if any.
+     * @return The ID of the parent connection group for this connection, if any.
+     */
+    public Integer getParentID() {
+        return parentID;
+    }
+
+    /**
+     * Sets the ID of the parent connection group for this connection.
+     * @param connectionID The ID of the parent connection group for this connection.
+     */
+    public void setParentID(Integer parentID) {
+        this.parentID = parentID;
+    }
+
+    /**
      * Initialize from explicit values.
      *
      * @param connectionID The ID of the associated database record, if any.
+     * @param parentID The D of the parent connection group for this connection, if any.
      * @param identifier The unique identifier associated with this connection.
      * @param config The GuacamoleConfiguration associated with this connection.
      * @param history All ConnectionRecords associated with this connection.
      * @param userID The IID of the user who queried this connection.
      */
-    public void init(Integer connectionID, String identifier,
-            GuacamoleConfiguration config,
+    public void init(Integer connectionID, Integer parentID, String name, 
+            String identifier, GuacamoleConfiguration config,
             List<? extends ConnectionRecord> history, int userID) {
 
         this.connectionID = connectionID;
+        this.parentID = parentID;
+        setName(name);
         setIdentifier(identifier);
         setConfiguration(config);
         this.history.addAll(history);
@@ -121,7 +145,7 @@ public class MySQLConnection extends AbstractConnection {
 
     @Override
     public GuacamoleSocket connect(GuacamoleClientInformation info) throws GuacamoleException {
-        return connectionService.connect(this, info, userID);
+        return connectionService.connect(this, info, userID, null);
     }
 
     @Override

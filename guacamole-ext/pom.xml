@@ -2,12 +2,56 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
-    <groupId>net.sourceforge.guacamole</groupId>
+    <groupId>org.glyptodon.guacamole</groupId>
     <artifactId>guacamole-ext</artifactId>
     <packaging>jar</packaging>
-    <version>0.8.0</version>
+    <version>0.8.1</version>
     <name>guacamole-ext</name>
     <url>http://guac-dev.org/</url>
+
+    <description>
+        The Java API for extending the main Guacamole web application. This
+        is not needed for authoring a new Guacamole-based web application.
+    </description>
+
+    <!-- All applicable licenses -->
+    <licenses>
+        <license>
+            <name>Mozilla Public License Version 1.1</name>
+            <url>http://www.mozilla.org/MPL/1.1/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GNU General Public License, version 2</name>
+            <url>http://www.gnu.org/licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GNU Lesser General Public License, version 2.1</name>
+            <url>http://www.gnu.org/licenses/lgpl-2.1.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <!-- Git repository -->
+    <scm>
+        <url>https://github.com/glyptodon/guacamole-client</url>
+        <connection>scm:git:git://github.com/glyptodon/guacamole-client.git</connection>
+    </scm>
+
+    <!-- Developers -->
+    <developers>
+        <developer>
+            <id>mike.jumper</id>
+            <name>Michael Jumper</name>
+            <email>mike.jumper@guac-dev.org</email>
+        </developer>
+        <developer>
+            <id>james.muehlner</id>
+            <name>James Muehlner</name>
+            <email>james.muehlner@guac-dev.org</email>
+        </developer>
+    </developers>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -26,6 +70,37 @@
                 </configuration>
             </plugin>
 
+            <!-- Attach source jar -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Attach JavaDoc jar -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <detectOfflineLinks>false</detectOfflineLinks>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 
@@ -41,22 +116,12 @@
 
         <!-- Guacamole Java API -->
         <dependency>
-            <groupId>net.sourceforge.guacamole</groupId>
+            <groupId>org.glyptodon.guacamole</groupId>
             <artifactId>guacamole-common</artifactId>
             <version>0.8.0</version>
             <scope>compile</scope>
         </dependency>
 
     </dependencies>
-
-    <repositories>
-        
-        <!-- Central Guacamole repository -->
-        <repository>
-            <id>guac-dev</id>
-            <url>http://guac-dev.org/repo</url>
-        </repository>
-        
-    </repositories>
 
 </project>

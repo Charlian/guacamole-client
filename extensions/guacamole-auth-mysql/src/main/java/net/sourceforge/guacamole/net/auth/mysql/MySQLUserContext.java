@@ -38,11 +38,11 @@ package net.sourceforge.guacamole.net.auth.mysql;
  * ***** END LICENSE BLOCK ***** */
 
 import com.google.inject.Inject;
-import net.sourceforge.guacamole.GuacamoleException;
-import net.sourceforge.guacamole.net.auth.Connection;
-import net.sourceforge.guacamole.net.auth.Directory;
-import net.sourceforge.guacamole.net.auth.User;
-import net.sourceforge.guacamole.net.auth.UserContext;
+import org.glyptodon.guacamole.GuacamoleException;
+import org.glyptodon.guacamole.net.auth.ConnectionGroup;
+import org.glyptodon.guacamole.net.auth.Directory;
+import org.glyptodon.guacamole.net.auth.User;
+import org.glyptodon.guacamole.net.auth.UserContext;
 import net.sourceforge.guacamole.net.auth.mysql.service.UserService;
 
 /**
@@ -63,13 +63,12 @@ public class MySQLUserContext implements UserContext {
      */
     @Inject
     private UserDirectory userDirectory;
-
+    
     /**
-     * Connection directory restricted by the permissions of the user associated
-     * with this context.
+     * The root connection group.
      */
     @Inject
-    private ConnectionDirectory connectionDirectory;
+    private MySQLConnectionGroup rootConnectionGroup;
 
     /**
      * Service for accessing users.
@@ -85,7 +84,10 @@ public class MySQLUserContext implements UserContext {
     public void init(int user_id) {
         this.user_id = user_id;
         userDirectory.init(user_id);
-        connectionDirectory.init(user_id);
+        rootConnectionGroup.init(null, null, 
+                MySQLConstants.CONNECTION_GROUP_ROOT_IDENTIFIER, 
+                MySQLConstants.CONNECTION_GROUP_ROOT_IDENTIFIER, 
+                ConnectionGroup.Type.ORGANIZATIONAL, user_id);
     }
 
     @Override
@@ -99,8 +101,8 @@ public class MySQLUserContext implements UserContext {
     }
 
     @Override
-    public Directory<String, Connection> getConnectionDirectory() throws GuacamoleException {
-        return connectionDirectory;
+    public ConnectionGroup getRootConnectionGroup() throws GuacamoleException {
+        return rootConnectionGroup;
     }
 
 }

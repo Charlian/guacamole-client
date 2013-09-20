@@ -35,9 +35,9 @@
  * ***** END LICENSE BLOCK ***** */
 package net.sourceforge.guacamole.net.auth.mysql.properties;
 
-import net.sourceforge.guacamole.properties.BooleanGuacamoleProperty;
-import net.sourceforge.guacamole.properties.IntegerGuacamoleProperty;
-import net.sourceforge.guacamole.properties.StringGuacamoleProperty;
+import org.glyptodon.guacamole.properties.BooleanGuacamoleProperty;
+import org.glyptodon.guacamole.properties.IntegerGuacamoleProperty;
+import org.glyptodon.guacamole.properties.StringGuacamoleProperty;
 
 /**
  * Properties used by the MySQL Authentication plugin.
@@ -109,4 +109,16 @@ public class MySQLGuacamoleProperties {
         public String getName() { return "mysql-disallow-simultaneous-connections"; }
 
     };
+
+    /**
+     * Whether or not the same user accessing the same connection or connection group at the same time should be disallowed.
+     */
+    public static final BooleanGuacamoleProperty MYSQL_DISALLOW_DUPLICATE_CONNECTIONS = new BooleanGuacamoleProperty() {
+
+        @Override
+        public String getName() { return "mysql-disallow-duplicate-connections"; }
+
+    };
+    
+    
 }
